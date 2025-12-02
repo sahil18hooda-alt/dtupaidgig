@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button'; // Assuming we'll create this later or use standard HTML for now
+// import { Button } from '@/components/ui/button'; // Removed unused import
 import { Menu, User as UserIcon } from 'lucide-react';
 
 export default function Navbar() {
