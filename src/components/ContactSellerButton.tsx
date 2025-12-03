@@ -13,12 +13,16 @@ interface ContactSellerButtonProps {
 }
 
 export default function ContactSellerButton({ gigId, sellerId, gigTitle }: ContactSellerButtonProps) {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
 
     const handleContact = async () => {
+        if (authLoading) return; // Don't do anything if auth is still loading
+
         if (!user) {
+            // Store return URL to redirect back after login
+            // For now, just go to login
             router.push('/login');
             return;
         }

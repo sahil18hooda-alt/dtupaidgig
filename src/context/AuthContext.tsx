@@ -27,28 +27,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         let mounted = true;
 
-        // Failsafe timeout: Force loading to false after 5 seconds
-        const timeoutId = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn('AuthContext: Loading timed out, forcing false');
-                setLoading(false);
-            }
-        }, 5000);
-
-        const fetchSession = async () => {
+        const initializeAuth = async () => {
             try {
+                // 1. Get initial session
                 const { data: { session }, error } = await supabase.auth.getSession();
+
                 if (error) throw error;
 
                 if (mounted) {
                     setSession(session);
-
                     if (session?.user) {
-                        await fetchUserProfile(session.user.id);
+                        // Optimistically set user from session metadata first
+                        setUser({
+                            id: session.user.id,
+                            email: session.user.email!,
+                            full_name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
+                            avatar_url: session.user.user_metadata.avatar_url,
+                            // Default values for other fields until profile loads
+                            bio: '',
+                            rating_as_buyer: 0,
+                            rating_as_seller: 0,
+                            total_gigs_completed: 0,
+                            created_at: new Date().toISOString()
+                        });
+
+                        // Then fetch full profile in background
+                        fetchUserProfile(session.user.id);
                     }
                 }
             } catch (err) {
-                console.error('AuthContext: Error in fetchSession:', err);
+                console.error('AuthContext: Initialization error:', err);
             } finally {
                 if (mounted) {
                     setLoading(false);
@@ -56,23 +64,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         };
 
-        fetchSession();
+        initializeAuth();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (mounted) {
-                setSession(session);
-                if (session?.user) {
-                    await fetchUserProfile(session.user.id);
-                } else {
-                    setUser(null);
-                }
-                setLoading(false);
+            if (!mounted) return;
+
+            setSession(session);
+
+            if (session?.user) {
+                // Same optimistic update pattern
+                setUser({
+                    id: session.user.id,
+                    email: session.user.email!,
+                    full_name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
+                    avatar_url: session.user.user_metadata.avatar_url,
+                    bio: '',
+                    rating_as_buyer: 0,
+                    rating_as_seller: 0,
+                    total_gigs_completed: 0,
+                    created_at: new Date().toISOString()
+                });
+                await fetchUserProfile(session.user.id);
+            } else {
+                setUser(null);
             }
+            setLoading(false);
         });
 
         return () => {
             mounted = false;
-            clearTimeout(timeoutId);
             subscription.unsubscribe();
         };
     }, []);

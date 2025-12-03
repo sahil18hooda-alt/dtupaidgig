@@ -43,7 +43,7 @@ export default function ChatWindow({ conversationId, gigId, gigCreatorId, gigSta
 
         // Subscribe to new messages
         const channel = supabase
-            .channel(`conversation:${conversationId}`)
+            .channel(`chat:${conversationId}`)
             .on(
                 'postgres_changes',
                 {
@@ -53,14 +53,11 @@ export default function ChatWindow({ conversationId, gigId, gigCreatorId, gigSta
                     filter: `conversation_id=eq.${conversationId}`,
                 },
                 (payload) => {
+                    const newMessage = payload.new as Message;
+
+                    // Prevent duplicates from own optimistic updates
+                    // We check if we already have this message ID
                     setMessages((prev) => {
-                        const newMessage = payload.new as Message;
-
-                        // Prevent duplicates from own optimistic updates
-                        if (newMessage.sender_id === user.id) {
-                            return prev;
-                        }
-
                         if (prev.some(m => m.id === newMessage.id)) {
                             return prev;
                         }
