@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -11,6 +12,13 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const { session } = useAuth();
+
+    useEffect(() => {
+        if (session) {
+            router.replace('/');
+        }
+    }, [session, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

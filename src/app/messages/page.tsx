@@ -13,12 +13,17 @@ type ConversationWithDetails = Conversation & {
 };
 
 export default function MessagesPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user) return;
+        if (authLoading) return;
+
+        if (!user) {
+            setLoading(false);
+            return;
+        }
 
         const fetchConversations = async () => {
             const { data, error } = await supabase
@@ -41,9 +46,26 @@ export default function MessagesPage() {
         };
 
         fetchConversations();
-    }, [user]);
+    }, [user, authLoading]);
 
-    if (loading) return <div>Loading messages...</div>;
+    if (authLoading || loading) {
+        return (
+            <div className="flex justify-center items-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-gray-500 mb-4">Please log in to view messages.</p>
+                <Link href="/login" className="text-primary hover:underline">
+                    Go to Login
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-3xl mx-auto">

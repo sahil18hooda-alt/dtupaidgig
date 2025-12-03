@@ -44,6 +44,11 @@ export default function GigForm() {
             let attachmentUrl = null;
 
             if (file) {
+                // Validate file size (e.g., 5MB limit)
+                if (file.size > 5 * 1024 * 1024) {
+                    throw new Error('File size must be less than 5MB');
+                }
+
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
                 const filePath = `${user.id}/${fileName}`;
@@ -75,12 +80,13 @@ export default function GigForm() {
 
             if (insertError) throw insertError;
 
-            router.push('/');
+            // Use replace to avoid adding to history stack and force a harder navigation
+            router.replace('/');
             router.refresh();
         } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
+            console.error('Error posting gig:', err);
+            setError(err.message || 'Failed to post gig. Please try again.');
+            setLoading(false); // Only stop loading on error, otherwise keep it until redirect
         }
     };
 

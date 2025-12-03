@@ -25,46 +25,74 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            if (session?.user) {
-                await fetchUserProfile(session.user.id);
+        let mounted = true;
+
+        // Failsafe timeout: Force loading to false after 5 seconds
+        const timeoutId = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn('AuthContext: Loading timed out, forcing false');
+                setLoading(false);
             }
-            setLoading(false);
+        }, 5000);
+
+        const fetchSession = async () => {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+
+                if (mounted) {
+                    setSession(session);
+
+                    if (session?.user) {
+                        await fetchUserProfile(session.user.id);
+                    }
+                }
+            } catch (err) {
+                console.error('AuthContext: Error in fetchSession:', err);
+            } finally {
+                if (mounted) {
+                    setLoading(false);
+                }
+            }
         };
 
         fetchSession();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            setSession(session);
-            if (session?.user) {
-                await fetchUserProfile(session.user.id);
-            } else {
-                setUser(null);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (mounted) {
+                setSession(session);
+                if (session?.user) {
+                    await fetchUserProfile(session.user.id);
+                } else {
+                    setUser(null);
+                }
+                setLoading(false);
             }
-            setLoading(false);
         });
 
         return () => {
+            mounted = false;
+            clearTimeout(timeoutId);
             subscription.unsubscribe();
         };
     }, []);
 
     const fetchUserProfile = async (userId: string) => {
         try {
-            const { data, error } = await supabase
+            // 1. Try to fetch the user profile
+            let { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', userId)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 is "The result contains 0 rows"
-                console.error('Error fetching user profile:', error);
-            } else if (data) {
+            if (data) {
                 setUser(data);
-            } else {
-                // User profile doesn't exist, create it
+                return;
+            }
+
+            // 2. If not found (PGRST116), try to create it
+            if (error && error.code === 'PGRST116') {
                 console.log('User profile missing, creating...');
                 const { data: sessionData } = await supabase.auth.getSession();
                 const sessionUser = sessionData.session?.user;
@@ -81,12 +109,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         .select()
                         .single();
 
-                    if (createError) {
-                        console.error('Error creating user profile:', createError);
-                    } else {
+                    if (newUser) {
                         setUser(newUser);
+                    } else if (createError) {
+                        console.warn('Error creating user profile (might already exist):', createError);
+                        // 3. Retry fetch in case of race condition (trigger created it)
+                        const { data: retryData } = await supabase
+                            .from('users')
+                            .select('*')
+                            .eq('id', userId)
+                            .single();
+
+                        if (retryData) {
+                            setUser(retryData);
+                        }
                     }
                 }
+            } else {
+                console.error('Error fetching user profile:', error);
             }
         } catch (error) {
             console.error('Unexpected error fetching user profile:', error);
