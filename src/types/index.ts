@@ -7,6 +7,7 @@ export type User = {
     rating_as_buyer: number;
     rating_as_seller: number;
     total_gigs_completed: number;
+    created_at?: string;
 };
 
 export type Gig = {
